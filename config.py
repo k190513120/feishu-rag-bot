@@ -13,8 +13,7 @@ def _require(key: str) -> str:
 
 FEISHU_APP_ID = _require("FEISHU_APP_ID")
 FEISHU_APP_SECRET = _require("FEISHU_APP_SECRET")
-GPT_API_URL = _require("GPT_API_URL")
-GPT_API_AK = _require("GPT_API_AK")
+OPENAI_API_KEY = _require("OPENAI_API_KEY")
 PINECONE_API_KEY = _require("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "feishu")
 FEISHU_VERIFICATION_TOKEN = os.getenv("FEISHU_VERIFICATION_TOKEN", "")

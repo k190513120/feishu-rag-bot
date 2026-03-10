@@ -1,10 +1,10 @@
-import requests
-from config import GPT_API_URL, GPT_API_AK
+from openai import OpenAI
+from config import OPENAI_API_KEY
 from embedding.openai_embedder import embed_query
 from vectorstore.pinecone_store import query as pinecone_query
 from rag.prompt_templates import SYSTEM_PROMPT, USER_PROMPT
 
-CHAT_MODEL = "gpt-5.4-2026-03-05"
+_client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def retrieve(question: str, top_k: int = 3) -> list[dict]:
@@ -22,7 +22,7 @@ def build_context(results: list[dict]) -> str:
 
 
 def generate_answer(question: str, top_k: int = 3) -> str:
-    """Full RAG pipeline: embed → search → GPT generate."""
+    """Full RAG pipeline: embed → search → GPT-4o generate."""
     results = retrieve(question, top_k=top_k)
 
     if not results:
@@ -30,21 +30,14 @@ def generate_answer(question: str, top_k: int = 3) -> str:
 
     context = build_context(results)
 
-    resp = requests.post(
-        GPT_API_URL,
-        params={"ak": GPT_API_AK},
-        json={
-            "stream": False,
-            "model": CHAT_MODEL,
-            "max_tokens": 1024,
-            "messages": [
-                {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT.format(context=context)}]},
-                {"role": "user", "content": [{"type": "text", "text": USER_PROMPT.format(question=question)}]},
-            ],
-        },
-        timeout=60,
+    response = _client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
+            {"role": "user", "content": USER_PROMPT.format(question=question)},
+        ],
+        temperature=0.3,
+        max_tokens=1024,
     )
-    resp.raise_for_status()
-    data = resp.json()
 
-    return data["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
