@@ -13,7 +13,8 @@ def _require(key: str) -> str:
 
 FEISHU_APP_ID = _require("FEISHU_APP_ID")
 FEISHU_APP_SECRET = _require("FEISHU_APP_SECRET")
-OPENAI_API_KEY = _require("OPENAI_API_KEY")
+OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 PINECONE_API_KEY = _require("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "feishu")
 FEISHU_VERIFICATION_TOKEN = os.getenv("FEISHU_VERIFICATION_TOKEN", "")

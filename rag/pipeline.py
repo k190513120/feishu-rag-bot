@@ -1,10 +1,10 @@
 from openai import OpenAI
-from config import OPENAI_API_KEY
+from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from embedding.openai_embedder import embed_query
 from vectorstore.pinecone_store import query as pinecone_query
 from rag.prompt_templates import SYSTEM_PROMPT, USER_PROMPT
 
-_client = OpenAI(api_key=OPENAI_API_KEY)
+_client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=OPENROUTER_BASE_URL)
 
 
 def retrieve(question: str, top_k: int = 3) -> list[dict]:
@@ -31,7 +31,7 @@ def generate_answer(question: str, top_k: int = 3) -> str:
     context = build_context(results)
 
     response = _client.chat.completions.create(
-        model="gpt-4o",
+        model="openai/gpt-4o",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
             {"role": "user", "content": USER_PROMPT.format(question=question)},
