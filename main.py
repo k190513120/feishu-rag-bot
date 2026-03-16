@@ -27,6 +27,22 @@ def health():
     return {"status": "ok"}
 
 
+def _start_sync():
+    """Start the background sync scheduler and run initial sync."""
+    from sync.scheduler import run_sync, start_scheduler
+    from config import SYNC_INTERVAL_HOURS
+
+    # Run initial sync on startup
+    import threading
+    threading.Thread(target=run_sync, daemon=True).start()
+
+    # Start periodic scheduler
+    start_scheduler(interval_hours=SYNC_INTERVAL_HOURS)
+
+
+_start_sync()
+
+
 if __name__ == "__main__":
     import os
     port = int(os.getenv("PORT", 8080))

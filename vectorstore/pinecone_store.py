@@ -28,6 +28,30 @@ def upsert_vectors(vectors: list[dict]):
     print(f"Upserted {len(vectors)} vectors to Pinecone")
 
 
+def delete_vectors(ids: list[str]):
+    """Delete vectors by IDs from Pinecone."""
+    if not ids:
+        return
+    index = _get_index()
+    batch_size = 100
+    for i in range(0, len(ids), batch_size):
+        batch = ids[i:i + batch_size]
+        index.delete(ids=batch)
+    print(f"Deleted {len(ids)} vectors from Pinecone")
+
+
+def list_all_ids() -> set[str]:
+    """List all vector IDs in the Pinecone index."""
+    index = _get_index()
+    all_ids = set()
+
+    # Use list() with pagination to fetch all IDs
+    for id_list in index.list():
+        all_ids.update(id_list)
+
+    return all_ids
+
+
 def query(vector: list[float], top_k: int = 3) -> list[dict]:
     """Query Pinecone and return top_k results with metadata."""
     index = _get_index()
