@@ -4,13 +4,26 @@ from lark_oapi.core import HttpMethod, AccessTokenType
 from lark_oapi.core.model.base_request import BaseRequest
 from lark_oapi.api.wiki.v2 import GetNodeSpaceRequest
 
-from feishu.client import get_client
-from config import WIKI_TOKEN
+from config import WIKI_TOKEN, FEISHU_SYNC_APP_ID, FEISHU_SYNC_APP_SECRET
+
+_sync_client: lark.Client | None = None
+
+
+def _get_sync_client() -> lark.Client:
+    """Get a dedicated Feishu client for spreadsheet operations."""
+    global _sync_client
+    if _sync_client is None:
+        _sync_client = lark.Client.builder() \
+            .app_id(FEISHU_SYNC_APP_ID) \
+            .app_secret(FEISHU_SYNC_APP_SECRET) \
+            .log_level(lark.LogLevel.INFO) \
+            .build()
+    return _sync_client
 
 
 def resolve_wiki_token(wiki_token: str) -> str:
     """Resolve a wiki node token to the underlying spreadsheet obj_token."""
-    client = get_client()
+    client = _get_sync_client()
     request = GetNodeSpaceRequest.builder().token(wiki_token).build()
     response = client.wiki.v2.space.get_node(request)
 
@@ -24,7 +37,7 @@ def resolve_wiki_token(wiki_token: str) -> str:
 
 def list_sheets(spreadsheet_token: str) -> list[dict]:
     """List all sheets in a spreadsheet. Returns list of {sheet_id, title, index}."""
-    client = get_client()
+    client = _get_sync_client()
 
     request = BaseRequest.builder() \
         .http_method(HttpMethod.GET) \
@@ -58,7 +71,7 @@ def list_sheets(spreadsheet_token: str) -> list[dict]:
 
 def read_sheet(spreadsheet_token: str, sheet_id: str) -> list[dict]:
     """Read all rows from a sheet. Columns: A=模块, B=类型, C=标准问题, D=参考答案."""
-    client = get_client()
+    client = _get_sync_client()
 
     range_str = f"{sheet_id}!A:D"
 
