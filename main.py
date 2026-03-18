@@ -16,10 +16,21 @@ dispatcher = build_dispatcher(FEISHU_ENCRYPT_KEY, FEISHU_VERIFICATION_TOKEN)
 
 @app.route("/event", methods=["POST"])
 def event():
-    # Handle challenge verification directly (before SDK processing)
     body = request.get_json(force=True)
+
+    # Handle challenge verification (unencrypted)
     if body.get("type") == "url_verification":
         return jsonify({"challenge": body.get("challenge", "")})
+
+    # Handle challenge verification (encrypted)
+    if "encrypt" in body:
+        from lark_oapi.core.utils import AESCipher
+        try:
+            decrypted = json.loads(AESCipher(FEISHU_ENCRYPT_KEY).decrypt_string(body["encrypt"]))
+            if decrypted.get("type") == "url_verification":
+                return jsonify({"challenge": decrypted.get("challenge", "")})
+        except Exception:
+            pass  # Not a challenge, fall through to SDK
 
     raw_req = parse_req()
     raw_resp = dispatcher.do(raw_req)
