@@ -21,6 +21,7 @@ def build_oauth_url(chat_id: str, open_chat_id: str) -> str:
     params = urlencode({
         "app_id": FEISHU_APP_ID,
         "redirect_uri": f"{BASE_URL}/oauth/callback",
+        "scope": "im:chat im:chat.members:write_only",
         "state": state,
     })
     return f"https://open.feishu.cn/open-apis/authen/v1/authorize?{params}"
