@@ -6,9 +6,10 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger, P2CardActionTriggerResponse, CallBackToast,
 )
 
-from feishu.cards import build_auth_card, build_confirm_card
+from feishu.auth import build_oauth_url, pop_user_token
+from feishu.cards import build_auth_card
 from feishu.group import add_bot_to_chat
-from feishu.message import reply_card, reply_text, send_message
+from feishu.message import reply_card, reply_text
 from rag.pipeline import generate_answer
 
 # In-memory dedup set (Feishu retries within 3s)
@@ -40,7 +41,9 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
         content = json.loads(message.content)
         chat_id = content.get("chat_id", "")
         if chat_id:
-            reply_card(message_id, build_auth_card(chat_id))
+            open_chat_id = message.chat_id
+            oauth_url = build_oauth_url(chat_id, open_chat_id)
+            reply_card(message_id, build_auth_card(oauth_url))
         return
 
     # Only handle text messages
@@ -73,22 +76,20 @@ def _handle_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerRespons
     chat_id = action_value.get("chat_id", "")
     open_chat_id = event.context.open_chat_id
 
-    if action == "auth_join_group" and chat_id and open_chat_id:
-        # User clicked "授权" — send the confirm card to the same chat
-        card_content = json.dumps(build_confirm_card(chat_id))
-        send_message(open_chat_id, "interactive", card_content)
+    if action == "confirm_join_group" and chat_id and open_chat_id:
+        # Retrieve the user_access_token stored during OAuth callback
+        token_key = f"{open_chat_id}:{chat_id}"
+        user_token = pop_user_token(token_key)
 
         resp = P2CardActionTriggerResponse()
         resp.toast = CallBackToast()
-        resp.toast.type = "success"
-        resp.toast.content = "已授权"
-        return resp
 
-    if action == "confirm_join_group" and chat_id:
-        # User clicked "确认" — add the bot to the target group
-        success = add_bot_to_chat(chat_id)
-        resp = P2CardActionTriggerResponse()
-        resp.toast = CallBackToast()
+        if not user_token:
+            resp.toast.type = "error"
+            resp.toast.content = "授权已过期，请重新分享群名片"
+            return resp
+
+        success = add_bot_to_chat(chat_id, user_token)
         if success:
             resp.toast.type = "success"
             resp.toast.content = "已成功加入群聊"

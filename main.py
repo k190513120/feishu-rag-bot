@@ -1,9 +1,13 @@
 import json
+import lark_oapi as lark
 from flask import Flask, request, jsonify
 from lark_oapi.adapter.flask import parse_req, parse_resp
 
 from config import FEISHU_VERIFICATION_TOKEN, FEISHU_ENCRYPT_KEY
+from feishu.auth import parse_oauth_state, exchange_code_for_token, store_user_token
+from feishu.cards import build_confirm_card
 from feishu.event_handler import build_dispatcher
+from feishu.message import send_message
 
 app = Flask(__name__)
 
@@ -20,6 +24,37 @@ def event():
     raw_req = parse_req()
     raw_resp = dispatcher.do(raw_req)
     return parse_resp(raw_resp)
+
+
+@app.route("/oauth/callback")
+def oauth_callback():
+    code = request.args.get("code", "")
+    state_raw = request.args.get("state", "")
+
+    if not code or not state_raw:
+        return "Missing code or state", 400
+
+    try:
+        state = parse_oauth_state(state_raw)
+        chat_id = state["chat_id"]
+        open_chat_id = state["open_chat_id"]
+    except Exception:
+        return "Invalid state", 400
+
+    user_token = exchange_code_for_token(code)
+    if not user_token:
+        return "授权失败，请重试", 500
+
+    # Store token for the confirm step
+    token_key = f"{open_chat_id}:{chat_id}"
+    store_user_token(token_key, user_token)
+
+    # Send confirm card to the p2p chat
+    card_content = json.dumps(build_confirm_card(chat_id))
+    send_message(open_chat_id, "interactive", card_content)
+
+    lark.logger.info(f"OAuth success, stored token for {token_key}")
+    return "<html><body><h2>授权成功</h2><p>请返回飞书，点击「确认」按钮完成入群。</p></body></html>"
 
 
 @app.route("/health")

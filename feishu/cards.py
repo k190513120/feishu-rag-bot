@@ -1,5 +1,5 @@
-def build_auth_card(chat_id: str) -> dict:
-    """Build the '访问凭证授权' interactive card."""
+def build_auth_card(oauth_url: str) -> dict:
+    """Build the '访问凭证授权' interactive card. Button opens OAuth URL."""
     return {
         "config": {"wide_screen_mode": True},
         "header": {
@@ -25,10 +25,7 @@ def build_auth_card(chat_id: str) -> dict:
                         "tag": "button",
                         "text": {"tag": "plain_text", "content": "授权"},
                         "type": "primary",
-                        "value": {
-                            "action": "auth_join_group",
-                            "chat_id": chat_id,
-                        },
+                        "url": oauth_url,
                     }
                 ],
             },
