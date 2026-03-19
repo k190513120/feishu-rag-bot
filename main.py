@@ -68,6 +68,7 @@ def oauth_callback():
     return "<html><body><h2>授权成功</h2><p>请返回飞书，点击「确认」按钮完成入群。</p></body></html>"
 
 
+@app.route("/")
 @app.route("/health")
 def health():
     return {"status": "ok"}
