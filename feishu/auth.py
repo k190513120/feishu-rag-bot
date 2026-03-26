@@ -109,17 +109,19 @@ def exchange_code_for_admin_token(code: str) -> dict | None:
         json={"grant_type": "authorization_code", "code": code},
     )
     data = resp.json()
+    lark.logger.info(f"Admin token exchange response: {data}")
     if data.get("code") != 0:
         lark.logger.error(f"Admin OAuth token exchange failed: {data}")
         return None
     return data["data"]
 
 
-def save_admin_token(access_token: str, refresh_token: str, expires_in: int):
+def save_admin_token(token_data: dict):
     """Persist admin token to local file."""
+    expires_in = token_data.get("expires_in", 7200)
     data = {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
+        "access_token": token_data["access_token"],
+        "refresh_token": token_data.get("refresh_token", ""),
         "expires_at": time.time() + expires_in - 60,  # 60s safety buffer
     }
     with _admin_token_lock:
@@ -166,15 +168,16 @@ def get_admin_user_token() -> str | None:
     if time.time() < token_data["expires_at"]:
         return token_data["access_token"]
 
-    # Token expired — refresh
+    # Token expired — try refresh
+    refresh_token = token_data.get("refresh_token", "")
+    if not refresh_token:
+        lark.logger.info("Admin token expired and no refresh_token, need re-authorization")
+        return None
+
     lark.logger.info("Admin user_access_token expired, refreshing...")
-    refreshed = _refresh_admin_token(token_data["refresh_token"])
+    refreshed = _refresh_admin_token(refresh_token)
     if not refreshed:
         lark.logger.error("Failed to refresh admin token, need re-authorization")
         return None
-    save_admin_token(
-        refreshed["access_token"],
-        refreshed["refresh_token"],
-        refreshed["expires_in"],
-    )
+    save_admin_token(refreshed)
     return refreshed["access_token"]

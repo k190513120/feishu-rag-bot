@@ -64,11 +64,7 @@ def oauth_callback():
         token_data = exchange_code_for_admin_token(code)
         if not token_data:
             return "授权失败，请重试", 500
-        save_admin_token(
-            token_data["access_token"],
-            token_data["refresh_token"],
-            token_data["expires_in"],
-        )
+        save_admin_token(token_data)
         lark.logger.info("Admin user-identity authorization succeeded")
         return (
             "<html><body><h2>管理员授权成功</h2>"
