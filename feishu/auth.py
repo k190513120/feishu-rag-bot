@@ -86,7 +86,7 @@ def build_admin_oauth_url() -> str:
     params = urlencode({
         "app_id": FEISHU_APP_ID,
         "redirect_uri": f"{BASE_URL}/oauth/callback",
-        "scope": "im:message.send_as_user",
+        "scope": "im:message im:message.send_as_user",
         "state": state,
     })
     return f"https://open.feishu.cn/open-apis/authen/v1/authorize?{params}"
