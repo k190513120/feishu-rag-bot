@@ -6,14 +6,22 @@ from lark_oapi.api.im.v1 import (
     ReplyMessageRequest,
     ReplyMessageRequestBody,
 )
+from lark_oapi.core.model import RequestOption
 
-from feishu.client import get_client
+from feishu.client import get_client, get_user_client
+from feishu.auth import get_admin_user_token
+
+
+def _user_option() -> RequestOption | None:
+    """Build RequestOption with admin user_access_token, or None if unavailable."""
+    token = get_admin_user_token()
+    if not token:
+        return None
+    return RequestOption.builder().user_access_token(token).build()
 
 
 def reply_text(message_id: str, text: str):
     """Reply to a Feishu message with plain text (threaded reply)."""
-    client = get_client()
-
     content = json.dumps({"text": text})
 
     request = ReplyMessageRequest.builder() \
@@ -26,7 +34,11 @@ def reply_text(message_id: str, text: str):
         ) \
         .build()
 
-    response = client.im.v1.message.reply(request)
+    option = _user_option()
+    if option:
+        response = get_user_client().im.v1.message.reply(request, option)
+    else:
+        response = get_client().im.v1.message.reply(request)
 
     if not response.success():
         lark.logger.error(
@@ -36,8 +48,6 @@ def reply_text(message_id: str, text: str):
 
 def reply_card(message_id: str, card: dict):
     """Reply to a Feishu message with an interactive card."""
-    client = get_client()
-
     content = json.dumps(card)
 
     request = ReplyMessageRequest.builder() \
@@ -50,7 +60,11 @@ def reply_card(message_id: str, card: dict):
         ) \
         .build()
 
-    response = client.im.v1.message.reply(request)
+    option = _user_option()
+    if option:
+        response = get_user_client().im.v1.message.reply(request, option)
+    else:
+        response = get_client().im.v1.message.reply(request)
 
     if not response.success():
         lark.logger.error(
@@ -60,8 +74,6 @@ def reply_card(message_id: str, card: dict):
 
 def send_message(chat_id: str, msg_type: str, content: str):
     """Send a message to a chat directly (not as a reply)."""
-    client = get_client()
-
     request = CreateMessageRequest.builder() \
         .receive_id_type("chat_id") \
         .request_body(
@@ -73,7 +85,11 @@ def send_message(chat_id: str, msg_type: str, content: str):
         ) \
         .build()
 
-    response = client.im.v1.message.create(request)
+    option = _user_option()
+    if option:
+        response = get_user_client().im.v1.message.create(request, option)
+    else:
+        response = get_client().im.v1.message.create(request)
 
     if not response.success():
         lark.logger.error(

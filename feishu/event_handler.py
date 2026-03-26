@@ -6,8 +6,8 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger, P2CardActionTriggerResponse, CallBackToast,
 )
 
-from feishu.auth import build_oauth_url, pop_user_token
-from feishu.cards import build_auth_card
+from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, pop_user_token
+from feishu.cards import build_auth_card, build_user_identity_auth_card
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
 from rag.pipeline import generate_answer
@@ -35,6 +35,12 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
             _seen_message_ids.clear()
 
     lark.logger.info(f"Received message_type: {message.message_type}")
+
+    # Check user-identity token; prompt authorization if missing
+    if not get_admin_user_token():
+        oauth_url = build_admin_oauth_url()
+        reply_card(message_id, build_user_identity_auth_card(oauth_url))
+        return
 
     # Handle share_chat messages: start the join-group flow
     if message.message_type == "share_chat":

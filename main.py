@@ -1,10 +1,13 @@
 import json
 import lark_oapi as lark
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from lark_oapi.adapter.flask import parse_req, parse_resp
 
 from config import FEISHU_VERIFICATION_TOKEN, FEISHU_ENCRYPT_KEY
-from feishu.auth import parse_oauth_state, exchange_code_for_token, store_user_token
+from feishu.auth import (
+    parse_oauth_state, exchange_code_for_token, store_user_token,
+    build_admin_oauth_url, exchange_code_for_admin_token, save_admin_token,
+)
 from feishu.cards import build_confirm_card
 from feishu.event_handler import build_dispatcher
 from feishu.message import send_message
@@ -37,6 +40,12 @@ def event():
     return parse_resp(raw_resp)
 
 
+@app.route("/admin/auth")
+def admin_auth():
+    """Admin visits this URL to authorize user-identity message sending."""
+    return redirect(build_admin_oauth_url())
+
+
 @app.route("/oauth/callback")
 def oauth_callback():
     code = request.args.get("code", "")
@@ -47,9 +56,29 @@ def oauth_callback():
 
     try:
         state = parse_oauth_state(state_raw)
-        chat_id = state["chat_id"]
-        open_chat_id = state["open_chat_id"]
     except Exception:
+        return "Invalid state", 400
+
+    # --- Admin authorization flow ---
+    if state.get("flow") == "admin":
+        token_data = exchange_code_for_admin_token(code)
+        if not token_data:
+            return "授权失败，请重试", 500
+        save_admin_token(
+            token_data["access_token"],
+            token_data["refresh_token"],
+            token_data["expires_in"],
+        )
+        lark.logger.info("Admin user-identity authorization succeeded")
+        return (
+            "<html><body><h2>管理员授权成功</h2>"
+            "<p>后续消息将以用户身份发送。</p></body></html>"
+        )
+
+    # --- Original group-join flow ---
+    chat_id = state.get("chat_id", "")
+    open_chat_id = state.get("open_chat_id", "")
+    if not chat_id or not open_chat_id:
         return "Invalid state", 400
 
     user_token = exchange_code_for_token(code)
