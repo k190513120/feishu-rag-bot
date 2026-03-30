@@ -22,34 +22,37 @@ MAX_SEEN = 10000
 def _process_message(message_id: str, message_type: str, content_raw: str,
                      chat_id: str) -> None:
     """Process a message in a background thread."""
-    # Handle share_chat messages: start the join-group flow
-    if message_type == "share_chat":
-        content = json.loads(content_raw)
-        target_chat_id = content.get("chat_id", "")
-        if target_chat_id:
-            oauth_url = build_oauth_url(target_chat_id, chat_id)
-            reply_card(message_id, build_auth_card(oauth_url))
-        return
+    try:
+        # Handle share_chat messages: start the join-group flow
+        if message_type == "share_chat":
+            content = json.loads(content_raw)
+            target_chat_id = content.get("chat_id", "")
+            if target_chat_id:
+                oauth_url = build_oauth_url(target_chat_id, chat_id)
+                reply_card(message_id, build_auth_card(oauth_url))
+            return
 
-    # Only handle text messages
-    if message_type != "text":
-        reply_text(message_id, "抱歉，我目前只能处理文本消息。")
-        return
+        # Only handle text messages
+        if message_type != "text":
+            reply_text(message_id, "抱歉，我目前只能处理文本消息。")
+            return
 
-    question = json.loads(content_raw).get("text", "").strip()
-    if not question:
-        return
+        question = json.loads(content_raw).get("text", "").strip()
+        if not question:
+            return
 
-    lark.logger.info(f"Question from user: {question}")
+        lark.logger.info(f"Question from user: {question}")
 
-    answer = generate_answer(question)
+        answer = generate_answer(question)
 
-    lark.logger.info(f"Answer: {answer[:100]}...")
+        lark.logger.info(f"Answer: {answer[:100]}...")
 
-    if chat_id:
-        write_reply_to_bitable(answer, chat_id)
-    else:
-        reply_text(message_id, answer)
+        if chat_id:
+            write_reply_to_bitable(answer, chat_id)
+        else:
+            reply_text(message_id, answer)
+    except Exception as e:
+        lark.logger.error(f"Error processing message {message_id}: {e}", exc_info=True)
 
 
 def _handle_message(data: P2ImMessageReceiveV1) -> None:
