@@ -8,6 +8,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
 
 from feishu.auth import build_oauth_url, pop_user_token
 from feishu.cards import build_auth_card
+from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
 from feishu.bitable import write_reply_to_bitable
@@ -32,13 +33,9 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 reply_card(message_id, build_auth_card(oauth_url))
             return
 
-        # Silently ignore interactive cards (e.g. Bitable bot replies)
-        if message_type == "interactive":
-            return
-
-        # Only handle text messages
+        # Only handle text messages; log and ignore everything else silently
         if message_type != "text":
-            reply_text(message_id, "抱歉，我目前只能处理文本消息。")
+            lark.logger.info(f"Ignoring non-text message_type: {message_type}")
             return
 
         question = json.loads(content_raw).get("text", "").strip()
@@ -51,7 +48,9 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
 
         lark.logger.info(f"Answer: {answer[:100]}...")
 
-        if chat_id:
+        # External group: write to Bitable for the Bitable bot to forward
+        # Internal group / p2p: reply directly
+        if chat_id and is_external_chat(chat_id):
             write_reply_to_bitable(answer, chat_id)
         else:
             reply_text(message_id, answer)
