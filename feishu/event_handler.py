@@ -71,7 +71,9 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
     # Ignore messages sent by the authorized admin user (our own replies) to prevent loops
     sender_open_id = event.sender.sender_id.open_id if event.sender.sender_id else None
     admin_open_id = get_admin_open_id()
+    lark.logger.info(f"sender_open_id={sender_open_id} admin_open_id={admin_open_id} sender_type={event.sender.sender_type}")
     if sender_open_id and admin_open_id and sender_open_id == admin_open_id:
+        lark.logger.info(f"Ignoring message from admin user {sender_open_id}")
         return
 
     # Dedup: skip if already processing/processed.
