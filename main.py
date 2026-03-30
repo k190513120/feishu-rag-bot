@@ -63,7 +63,8 @@ def oauth_callback():
     if state.get("flow") == "admin":
         token_data = exchange_code_for_admin_token(code)
         if not token_data:
-            return "授权失败，请重试", 500
+            # Return 200 so load balancer does not retry (code is single-use)
+            return "<html><body><h2>授权失败</h2><p>请重新访问 /admin/auth 再试。</p></body></html>"
         save_admin_token(token_data)
         lark.logger.info("Admin user-identity authorization succeeded")
         return (
@@ -79,7 +80,8 @@ def oauth_callback():
 
     user_token = exchange_code_for_token(code)
     if not user_token:
-        return "授权失败，请重试", 500
+        # Return 200 so load balancer does not retry (code is single-use)
+        return "<html><body><h2>授权失败</h2><p>请重新分享群名片再试。</p></body></html>"
 
     # Store token for the confirm step
     token_key = f"{open_chat_id}:{chat_id}"
