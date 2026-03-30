@@ -6,8 +6,8 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger, P2CardActionTriggerResponse, CallBackToast,
 )
 
-from feishu.auth import build_oauth_url, pop_user_token
-from feishu.cards import build_auth_card
+from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, pop_user_token
+from feishu.cards import build_auth_card, build_user_identity_auth_card
 from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
@@ -49,10 +49,14 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         lark.logger.info(f"Answer: {answer[:100]}...")
 
         # External group: write to Bitable for the Bitable bot to forward
-        # Internal group / p2p: reply directly
+        # Internal group / p2p: reply directly with user identity
         if chat_id and is_external_chat(chat_id):
             write_reply_to_bitable(answer, chat_id)
         else:
+            if not get_admin_user_token():
+                oauth_url = build_admin_oauth_url()
+                reply_card(message_id, build_user_identity_auth_card(oauth_url))
+                return
             reply_text(message_id, answer)
     except Exception as e:
         lark.logger.error(f"Error processing message {message_id}: {e}", exc_info=True)
