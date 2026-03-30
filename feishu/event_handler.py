@@ -6,7 +6,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger, P2CardActionTriggerResponse, CallBackToast,
 )
 
-from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, get_admin_open_id, pop_user_token
+from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, pop_user_token
 from feishu.cards import build_auth_card, build_user_identity_auth_card
 from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
@@ -57,7 +57,11 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 oauth_url = build_admin_oauth_url()
                 reply_card(message_id, build_user_identity_auth_card(oauth_url))
                 return
-            reply_text(message_id, answer)
+            sent_id = reply_text(message_id, answer)
+            # Add our own reply to dedup set so the echo event is ignored
+            if sent_id:
+                with _seen_lock:
+                    _seen_message_ids.add(sent_id)
     except Exception as e:
         lark.logger.error(f"Error processing message {message_id}: {e}", exc_info=True)
 
@@ -67,14 +71,6 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
     event = data.event
     message = event.message
     message_id = message.message_id
-
-    # Ignore messages sent by the authorized admin user (our own replies) to prevent loops
-    sender_open_id = event.sender.sender_id.open_id if event.sender.sender_id else None
-    admin_open_id = get_admin_open_id()
-    lark.logger.info(f"sender_open_id={sender_open_id} admin_open_id={admin_open_id} sender_type={event.sender.sender_type}")
-    if sender_open_id and admin_open_id and sender_open_id == admin_open_id:
-        lark.logger.info(f"Ignoring message from admin user {sender_open_id}")
-        return
 
     # Dedup: skip if already processing/processed.
     # Must happen synchronously before returning so Feishu gets 200 immediately

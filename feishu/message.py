@@ -20,8 +20,8 @@ def _user_option() -> RequestOption | None:
     return RequestOption.builder().user_access_token(token).build()
 
 
-def reply_text(message_id: str, text: str):
-    """Reply to a Feishu message with plain text (threaded reply)."""
+def reply_text(message_id: str, text: str) -> str | None:
+    """Reply to a Feishu message with plain text. Returns the sent message_id."""
     content = json.dumps({"text": text})
 
     request = ReplyMessageRequest.builder() \
@@ -41,9 +41,9 @@ def reply_text(message_id: str, text: str):
         response = get_client().im.v1.message.reply(request)
 
     if not response.success():
-        lark.logger.error(
-            f"Reply failed: {response.code} {response.msg}"
-        )
+        lark.logger.error(f"Reply failed: {response.code} {response.msg}")
+        return None
+    return response.data.message_id
 
 
 def reply_card(message_id: str, card: dict):
