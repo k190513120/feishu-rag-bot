@@ -32,8 +32,13 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 reply_card(message_id, build_auth_card(oauth_url))
             return
 
-        # Only handle text messages, silently ignore everything else
+        # Silently ignore interactive cards (e.g. Bitable bot replies)
+        if message_type == "interactive":
+            return
+
+        # Only handle text messages
         if message_type != "text":
+            reply_text(message_id, "抱歉，我目前只能处理文本消息。")
             return
 
         question = json.loads(content_raw).get("text", "").strip()
