@@ -68,6 +68,10 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
     message = event.message
     message_id = message.message_id
 
+    # Ignore messages sent by bots (including our own replies) to prevent loops
+    if event.sender.sender_type == "bot":
+        return
+
     # Dedup: skip if already processing/processed.
     # Must happen synchronously before returning so Feishu gets 200 immediately
     # and does not retry, which is the root cause of duplicate messages.
