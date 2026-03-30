@@ -10,6 +10,7 @@ from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_t
 from feishu.cards import build_auth_card, build_user_identity_auth_card
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
+from feishu.bitable import write_reply_to_bitable
 from rag.pipeline import generate_answer
 
 # In-memory dedup set (Feishu retries within 3s)
@@ -71,7 +72,12 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
 
     lark.logger.info(f"Answer: {answer[:100]}...")
 
-    reply_text(message_id, answer)
+    # Write to Bitable so the Bitable bot can forward to external group
+    chat_id = message.chat_id
+    if chat_id:
+        write_reply_to_bitable(answer, chat_id)
+    else:
+        reply_text(message_id, answer)
 
 
 def _handle_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
