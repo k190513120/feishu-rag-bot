@@ -19,59 +19,66 @@ _seen_lock = threading.Lock()
 MAX_SEEN = 10000
 
 
-def _handle_message(data: P2ImMessageReceiveV1) -> None:
-    """Handle im.message.receive_v1 event."""
-    event = data.event
-    message = event.message
-    message_id = message.message_id
-
-    # Dedup: skip if already processed
-    with _seen_lock:
-        if message_id in _seen_message_ids:
-            lark.logger.info(f"Skipping duplicate message: {message_id}")
-            return
-        _seen_message_ids.add(message_id)
-        # Prevent unbounded growth
-        if len(_seen_message_ids) > MAX_SEEN:
-            _seen_message_ids.clear()
-
-    lark.logger.info(f"Received message_type: {message.message_type}")
-
+def _process_message(message_id: str, message_type: str, content_raw: str,
+                     chat_id: str) -> None:
+    """Process a message in a background thread."""
     # Handle share_chat messages: start the join-group flow
-    if message.message_type == "share_chat":
-        content = json.loads(message.content)
-        chat_id = content.get("chat_id", "")
-        if chat_id:
-            open_chat_id = message.chat_id
-            oauth_url = build_oauth_url(chat_id, open_chat_id)
+    if message_type == "share_chat":
+        content = json.loads(content_raw)
+        target_chat_id = content.get("chat_id", "")
+        if target_chat_id:
+            oauth_url = build_oauth_url(target_chat_id, chat_id)
             reply_card(message_id, build_auth_card(oauth_url))
         return
 
     # Only handle text messages
-    if message.message_type != "text":
+    if message_type != "text":
         reply_text(message_id, "抱歉，我目前只能处理文本消息。")
         return
 
-    # Extract question text
-    content = json.loads(message.content)
-    question = content.get("text", "").strip()
-
+    question = json.loads(content_raw).get("text", "").strip()
     if not question:
         return
 
     lark.logger.info(f"Question from user: {question}")
 
-    # RAG pipeline
     answer = generate_answer(question)
 
     lark.logger.info(f"Answer: {answer[:100]}...")
 
-    # Write to Bitable so the Bitable bot can forward to external group
-    chat_id = message.chat_id
     if chat_id:
         write_reply_to_bitable(answer, chat_id)
     else:
         reply_text(message_id, answer)
+
+
+def _handle_message(data: P2ImMessageReceiveV1) -> None:
+    """Handle im.message.receive_v1 event — dedup then dispatch to background thread."""
+    event = data.event
+    message = event.message
+    message_id = message.message_id
+
+    # Dedup: skip if already processing/processed.
+    # Must happen synchronously before returning so Feishu gets 200 immediately
+    # and does not retry, which is the root cause of duplicate messages.
+    with _seen_lock:
+        if message_id in _seen_message_ids:
+            lark.logger.info(f"Skipping duplicate message: {message_id}")
+            return
+        _seen_message_ids.add(message_id)
+        if len(_seen_message_ids) > MAX_SEEN:
+            _seen_message_ids.clear()
+
+    lark.logger.info(f"Received message_type: {message.message_type}")
+
+    # Dispatch to background thread so this handler returns immediately.
+    # Feishu retries when response takes >3s — processing in background prevents retries.
+    threading.Thread(
+        target=_process_message,
+        args=(message.message_id, message.message_type,
+              message.content, message.chat_id),
+        daemon=True,
+    ).start()
 
 
 def _handle_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
