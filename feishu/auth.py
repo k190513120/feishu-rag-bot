@@ -123,10 +123,20 @@ def save_admin_token(token_data: dict):
         "access_token": token_data["access_token"],
         "refresh_token": token_data.get("refresh_token", ""),
         "expires_at": time.time() + expires_in - 60,  # 60s safety buffer
+        "open_id": token_data.get("open_id", ""),
     }
     with _admin_token_lock:
         with open(_ADMIN_TOKEN_FILE, "w") as f:
             json.dump(data, f)
+
+
+def get_admin_open_id() -> str | None:
+    """Return the open_id of the authorized admin user."""
+    with _admin_token_lock:
+        token_data = _load_admin_token()
+    if not token_data:
+        return None
+    return token_data.get("open_id") or None
 
 
 def _load_admin_token() -> dict | None:

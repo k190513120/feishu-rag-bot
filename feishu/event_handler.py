@@ -6,7 +6,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger, P2CardActionTriggerResponse, CallBackToast,
 )
 
-from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, pop_user_token
+from feishu.auth import build_oauth_url, build_admin_oauth_url, get_admin_user_token, get_admin_open_id, pop_user_token
 from feishu.cards import build_auth_card, build_user_identity_auth_card
 from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
@@ -68,8 +68,10 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
     message = event.message
     message_id = message.message_id
 
-    # Ignore messages sent by bots (including our own replies) to prevent loops
-    if event.sender.sender_type == "bot":
+    # Ignore messages sent by the authorized admin user (our own replies) to prevent loops
+    sender_open_id = event.sender.sender_id.open_id if event.sender.sender_id else None
+    admin_open_id = get_admin_open_id()
+    if sender_open_id and admin_open_id and sender_open_id == admin_open_id:
         return
 
     # Dedup: skip if already processing/processed.
