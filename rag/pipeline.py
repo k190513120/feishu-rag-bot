@@ -21,14 +21,19 @@ def build_context(results: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def generate_answer(question: str, top_k: int = 3) -> str:
-    """Full RAG pipeline: embed → search → GPT-4o generate."""
+SIMILARITY_THRESHOLD = 0.75
+
+
+def generate_answer(question: str, top_k: int = 3) -> str | None:
+    """Full RAG pipeline: embed → search → GPT-4o generate.
+    Returns None when no result clears SIMILARITY_THRESHOLD."""
     results = retrieve(question, top_k=top_k)
 
-    if not results:
-        return "抱歉，我没有找到相关的知识库内容来回答您的问题。"
+    relevant = [r for r in results if r.get("score", 0) >= SIMILARITY_THRESHOLD]
+    if not relevant:
+        return None
 
-    context = build_context(results)
+    context = build_context(relevant)
 
     response = _client.chat.completions.create(
         model="openai/gpt-4o",

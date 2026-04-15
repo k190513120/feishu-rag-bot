@@ -46,6 +46,10 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
 
         answer = generate_answer(question)
 
+        if not answer:
+            lark.logger.info("No relevant knowledge found, skipping reply")
+            return
+
         lark.logger.info(f"Answer: {answer[:100]}...")
 
         # External group: write to Bitable for the Bitable bot to forward
