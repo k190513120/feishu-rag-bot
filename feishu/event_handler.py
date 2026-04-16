@@ -12,6 +12,7 @@ from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
 from feishu.bitable import write_reply_to_bitable
+from feishu.history import get_chat_history, format_history_as_context
 from bot_api.petal import get_reply
 
 # In-memory dedup set (Feishu retries within 3s)
@@ -45,7 +46,16 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         lark.logger.info(f"Question from user: {question}")
 
         session_id = chat_id or "default"
-        answer = get_reply(question, session_id)
+
+        # Include recent chat history as context so the bot understands the thread
+        enriched_question = question
+        if chat_id:
+            history = get_chat_history(chat_id, exclude_message_id=message_id, limit=5)
+            context = format_history_as_context(history)
+            if context:
+                enriched_question = f"{context}\n\n当前问题：{question}"
+
+        answer = get_reply(enriched_question, session_id)
 
         if not answer:
             lark.logger.info("External bot returned no answer, skipping reply")
