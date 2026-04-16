@@ -101,20 +101,14 @@ def health():
     return {"status": "ok"}
 
 
-def _start_sync():
-    """Start the background sync scheduler and run initial sync."""
-    from sync.scheduler import run_sync, start_scheduler
-    from config import SYNC_INTERVAL_HOURS
-
-    # Run initial sync on startup
-    import threading
-    threading.Thread(target=run_sync, daemon=True).start()
-
-    # Start periodic scheduler
-    start_scheduler(interval_hours=SYNC_INTERVAL_HOURS)
-
-
-_start_sync()
+# RAG sync disabled: answers now come from an external bot API, not Pinecone.
+# def _start_sync():
+#     from sync.scheduler import run_sync, start_scheduler
+#     from config import SYNC_INTERVAL_HOURS
+#     import threading
+#     threading.Thread(target=run_sync, daemon=True).start()
+#     start_scheduler(interval_hours=SYNC_INTERVAL_HOURS)
+# _start_sync()
 
 
 if __name__ == "__main__":

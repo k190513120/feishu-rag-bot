@@ -12,7 +12,7 @@ from feishu.chat import is_external_chat
 from feishu.group import add_bot_to_chat
 from feishu.message import reply_card, reply_text
 from feishu.bitable import write_reply_to_bitable
-from rag.pipeline import generate_answer
+from bot_api.petal import get_reply
 
 # In-memory dedup set (Feishu retries within 3s)
 _seen_message_ids: set[str] = set()
@@ -44,10 +44,11 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
 
         lark.logger.info(f"Question from user: {question}")
 
-        answer = generate_answer(question)
+        session_id = chat_id or "default"
+        answer = get_reply(question, session_id)
 
         if not answer:
-            lark.logger.info("No relevant knowledge found, skipping reply")
+            lark.logger.info("External bot returned no answer, skipping reply")
             return
 
         lark.logger.info(f"Answer: {answer[:100]}...")
