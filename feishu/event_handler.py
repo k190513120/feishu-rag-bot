@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 import lark_oapi as lark
@@ -19,6 +20,17 @@ from bot_api.petal import get_reply
 _seen_message_ids: set[str] = set()
 _seen_lock = threading.Lock()
 MAX_SEEN = 10000
+
+# Fingerprint set for answers we wrote to Bitable. The Bitable bot reads the
+# table and posts our answer back into the chat as a brand-new message with a
+# message_id we never see — so message_id dedup cannot catch it. We track the
+# answer text instead and skip incoming messages whose content matches.
+_sent_answer_fps: set[str] = set()
+MAX_ANSWER_FPS = 1000
+
+
+def _fingerprint(text: str) -> str:
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
 
 
 def _process_message(message_id: str, message_type: str, content_raw: str,
@@ -42,6 +54,14 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         question = json.loads(content_raw).get("text", "").strip()
         if not question:
             return
+
+        # Skip echoes of answers we wrote to Bitable (external-group path).
+        # The Bitable bot relays our answer back into the chat — without this
+        # check, that relay would be treated as a new user question.
+        with _seen_lock:
+            if _fingerprint(question) in _sent_answer_fps:
+                lark.logger.info("Skipping bitable echo of own answer")
+                return
 
         lark.logger.info(f"Question from user: {question}")
 
@@ -67,6 +87,10 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         # Internal group / p2p: reply directly with user identity
         if chat_id and is_external_chat(chat_id):
             write_reply_to_bitable(answer, chat_id)
+            with _seen_lock:
+                _sent_answer_fps.add(_fingerprint(answer))
+                if len(_sent_answer_fps) > MAX_ANSWER_FPS:
+                    _sent_answer_fps.clear()
         else:
             if not get_admin_user_token():
                 oauth_url = build_admin_oauth_url()
