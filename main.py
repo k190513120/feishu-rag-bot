@@ -101,6 +101,43 @@ def health():
     return {"status": "ok"}
 
 
+@app.route("/debug/petal")
+def debug_petal():
+    """Diagnostic: probe Petal API from this container so we can see the real response."""
+    import os
+    import socket
+    import requests as _r
+    from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET
+
+    out = {"region": os.getenv("KOYEB_REGION", "?")}
+
+    try:
+        out["resolved_ip"] = socket.gethostbyname("petal-insight.juzibot.com")
+    except Exception as e:
+        out["resolved_ip_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        out["egress_ip"] = _r.get("https://api.ipify.org", timeout=5).text
+    except Exception as e:
+        out["egress_ip_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        r = _r.post(
+            "https://petal-insight.juzibot.com/openapi/get-access-token",
+            json={"accessKeyId": PETAL_ACCESS_KEY_ID,
+                  "accessKeySecret": PETAL_ACCESS_KEY_SECRET},
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+        out["petal_status"] = r.status_code
+        out["petal_headers"] = dict(r.headers)
+        out["petal_body"] = r.text[:1000]
+    except Exception as e:
+        out["petal_error"] = f"{type(e).__name__}: {e}"
+
+    return out
+
+
 # RAG sync disabled: answers now come from an external bot API, not Pinecone.
 # def _start_sync():
 #     from sync.scheduler import run_sync, start_scheduler

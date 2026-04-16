@@ -23,9 +23,17 @@ def _fetch_access_token() -> tuple[str, float] | None:
             headers={"Content-Type": "application/json"},
             timeout=10,
         )
+    except Exception as e:
+        lark.logger.error(f"Petal get-access-token request failed: {type(e).__name__}: {e}")
+        return None
+
+    try:
         data = resp.json()
     except Exception as e:
-        lark.logger.error(f"Petal get-access-token failed: {e}")
+        lark.logger.error(
+            f"Petal get-access-token non-JSON response: {type(e).__name__}: {e} "
+            f"status={resp.status_code} headers={dict(resp.headers)} body={resp.text[:500]!r}"
+        )
         return None
 
     inner = data.get("data") if isinstance(data.get("data"), dict) else data
