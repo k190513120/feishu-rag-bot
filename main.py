@@ -117,11 +117,12 @@ def debug_petal():
         out["egress_ip_error"] = f"{type(e).__name__}: {e}"
 
     try:
+        from bot_api.petal import _DEFAULT_HEADERS
         r = _r.post(
             f"{PETAL_BASE_URL}/openapi/get-access-token",
             json={"accessKeyId": PETAL_ACCESS_KEY_ID,
                   "accessKeySecret": PETAL_ACCESS_KEY_SECRET},
-            headers={"Content-Type": "application/json"},
+            headers={**_DEFAULT_HEADERS, "Content-Type": "application/json"},
             timeout=15,
         )
         out["petal_status"] = r.status_code
