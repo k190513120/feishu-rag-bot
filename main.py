@@ -103,18 +103,13 @@ def health():
 
 @app.route("/debug/petal")
 def debug_petal():
-    """Diagnostic: probe Petal API from this container so we can see the real response."""
+    """Diagnostic: probe Petal API (or its configured proxy) from this container."""
     import os
-    import socket
     import requests as _r
-    from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET
+    from urllib.parse import urlparse
+    from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET, PETAL_BASE_URL
 
-    out = {"region": os.getenv("KOYEB_REGION", "?")}
-
-    try:
-        out["resolved_ip"] = socket.gethostbyname("petal-insight.juzibot.com")
-    except Exception as e:
-        out["resolved_ip_error"] = f"{type(e).__name__}: {e}"
+    out = {"region": os.getenv("KOYEB_REGION", "?"), "base_url": PETAL_BASE_URL}
 
     try:
         out["egress_ip"] = _r.get("https://api.ipify.org", timeout=5).text
@@ -123,7 +118,7 @@ def debug_petal():
 
     try:
         r = _r.post(
-            "https://petal-insight.juzibot.com/openapi/get-access-token",
+            f"{PETAL_BASE_URL}/openapi/get-access-token",
             json={"accessKeyId": PETAL_ACCESS_KEY_ID,
                   "accessKeySecret": PETAL_ACCESS_KEY_SECRET},
             headers={"Content-Type": "application/json"},
@@ -131,7 +126,7 @@ def debug_petal():
         )
         out["petal_status"] = r.status_code
         out["petal_headers"] = dict(r.headers)
-        out["petal_body"] = r.text[:1000]
+        out["petal_body"] = r.text[:500]
     except Exception as e:
         out["petal_error"] = f"{type(e).__name__}: {e}"
 

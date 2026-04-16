@@ -3,9 +3,9 @@ import threading
 import requests
 import lark_oapi as lark
 
-from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET, PETAL_BOT_ID
+from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET, PETAL_BOT_ID, PETAL_BASE_URL
 
-_BASE_URL = "https://petal-insight.juzibot.com"
+_BASE_URL = PETAL_BASE_URL
 
 _token: str | None = None
 _token_expires_at: float = 0.0
