@@ -7,6 +7,16 @@ from config import PETAL_ACCESS_KEY_ID, PETAL_ACCESS_KEY_SECRET, PETAL_BOT_ID, P
 
 _BASE_URL = PETAL_BASE_URL
 
+# volcclb WAF in front of petal-insight.juzibot.com 403s the default
+# python-requests User-Agent. A normal browser-style UA passes through.
+_DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/17.0 Safari/605.1.15"
+    ),
+}
+
 _token: str | None = None
 _token_expires_at: float = 0.0
 _token_lock = threading.Lock()
@@ -20,7 +30,7 @@ def _fetch_access_token() -> tuple[str, float] | None:
                 "accessKeyId": PETAL_ACCESS_KEY_ID,
                 "accessKeySecret": PETAL_ACCESS_KEY_SECRET,
             },
-            headers={"Content-Type": "application/json"},
+            headers={**_DEFAULT_HEADERS, "Content-Type": "application/json"},
             timeout=10,
         )
     except Exception as e:
@@ -80,6 +90,7 @@ def get_reply(question: str, session_id: str) -> str | None:
         return requests.post(
             f"{_BASE_URL}/openapi/bot/message",
             headers={
+                **_DEFAULT_HEADERS,
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {auth_token}",
             },
