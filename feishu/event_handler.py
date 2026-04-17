@@ -15,6 +15,7 @@ from feishu.message import reply_card, reply_text
 from feishu.bitable import write_reply_to_bitable
 from feishu.history import get_chat_history, format_history_as_context
 from bot_api.petal import get_reply
+from config import PAUSE_ADMIN_OPEN_ID
 
 # In-memory dedup set (Feishu retries within 3s)
 _seen_message_ids: set[str] = set()
@@ -28,13 +29,17 @@ MAX_SEEN = 10000
 _sent_answer_fps: set[str] = set()
 MAX_ANSWER_FPS = 1000
 
+# Per-chat pause set. Admin (PAUSE_ADMIN_OPEN_ID) sends "3" to pause replies
+# in that chat, "4" to resume. In-memory: clears on Koyeb redeploy.
+_paused_chats: set[str] = set()
+
 
 def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
 
 
 def _process_message(message_id: str, message_type: str, content_raw: str,
-                     chat_id: str) -> None:
+                     chat_id: str, sender_open_id: str) -> None:
     """Process a message in a background thread."""
     try:
         # Handle share_chat messages: start the join-group flow
@@ -55,6 +60,22 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         if not question:
             return
 
+        # Admin pause control: "3" pauses replies in this chat, "4" resumes.
+        # Also swallows the command message itself — do not generate a reply to it.
+        if PAUSE_ADMIN_OPEN_ID and sender_open_id == PAUSE_ADMIN_OPEN_ID:
+            if question == "3":
+                _paused_chats.add(chat_id)
+                lark.logger.info(f"Admin paused replies in chat {chat_id}")
+                return
+            if question == "4":
+                _paused_chats.discard(chat_id)
+                lark.logger.info(f"Admin resumed replies in chat {chat_id}")
+                return
+
+        # If this chat is paused, stay silent regardless of who is speaking
+        if chat_id in _paused_chats:
+            return
+
         # Skip echoes of answers we wrote to Bitable (external-group path).
         # The Bitable bot relays our answer back into the chat — without this
         # check, that relay would be treated as a new user question.
@@ -63,7 +84,7 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 lark.logger.info("Skipping bitable echo of own answer")
                 return
 
-        lark.logger.info(f"Question from user: {question}")
+        lark.logger.info(f"Question from user (sender={sender_open_id}): {question}")
 
         session_id = chat_id or "default"
 
@@ -124,12 +145,18 @@ def _handle_message(data: P2ImMessageReceiveV1) -> None:
 
     lark.logger.info(f"Received message_type: {message.message_type}")
 
+    sender_open_id = ""
+    try:
+        sender_open_id = event.sender.sender_id.open_id or ""
+    except AttributeError:
+        pass
+
     # Dispatch to background thread so this handler returns immediately.
     # Feishu retries when response takes >3s — processing in background prevents retries.
     threading.Thread(
         target=_process_message,
         args=(message.message_id, message.message_type,
-              message.content, message.chat_id),
+              message.content, message.chat_id, sender_open_id),
         daemon=True,
     ).start()
 

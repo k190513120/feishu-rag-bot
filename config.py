@@ -32,3 +32,6 @@ PETAL_ACCESS_KEY_ID = _require("PETAL_ACCESS_KEY_ID")
 PETAL_ACCESS_KEY_SECRET = _require("PETAL_ACCESS_KEY_SECRET")
 PETAL_BOT_ID = os.getenv("PETAL_BOT_ID", "a7788492-5c7c-4f40-b121-643ce489ed7b")
 PETAL_BASE_URL = os.getenv("PETAL_BASE_URL", "https://petal-insight.juzibot.com").rstrip("/")
+# Admin operator open_id used to pause/resume bot replies in a given chat.
+# Set this after identifying 杜小龙's open_id from the sender log line.
+PAUSE_ADMIN_OPEN_ID = os.getenv("PAUSE_ADMIN_OPEN_ID", "")
