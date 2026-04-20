@@ -101,6 +101,61 @@ def health():
     return {"status": "ok"}
 
 
+@app.route("/debug/personal", methods=["POST"])
+def debug_personal():
+    """Diagnostic: verify Feishu internal IM gateway accepts the given cookie
+    from this Koyeb container. Cookie is passed via JSON body so it is never
+    persisted in env or source. Returns status codes, not full token values."""
+    import os
+    import requests as _r
+
+    cookie = (request.get_json(silent=True) or {}).get("cookie", "")
+    if not cookie:
+        return {"error": "POST {cookie: '...'} required"}, 400
+
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0")
+    common = {
+        "Cookie": cookie,
+        "User-Agent": ua,
+        "Origin": "https://open-dev.feishu.cn",
+        "Referer": "https://open-dev.feishu.cn/",
+        "x-app-id": "12",
+        "x-api-version": "1.0.8",
+        "x-device-info": "platform=websdk",
+    }
+
+    out = {"region": os.getenv("KOYEB_REGION", "?")}
+    try:
+        out["egress_ip"] = _r.get("https://api.ipify.org", timeout=5).text
+    except Exception as e:
+        out["egress_ip_error"] = str(e)
+
+    try:
+        r1 = _r.post("https://internal-api-lark-api.feishu.cn/accounts/csrf",
+                     headers=common, timeout=15)
+        out["csrf_status"] = r1.status_code
+        out["csrf_body_preview"] = r1.text[:200]
+        swp = r1.cookies.get("swp_csrf_token", "")
+        out["got_swp_csrf"] = bool(swp)
+    except Exception as e:
+        out["csrf_error"] = f"{type(e).__name__}: {e}"
+        return out
+
+    if not swp:
+        return out
+
+    try:
+        r2 = _r.get("https://internal-api-lark-api.feishu.cn/accounts/web/user",
+                    headers={**common, "x-csrf-token": swp}, timeout=15)
+        out["user_info_status"] = r2.status_code
+        out["user_info_body_preview"] = r2.text[:400]
+    except Exception as e:
+        out["user_info_error"] = f"{type(e).__name__}: {e}"
+
+    return out
+
+
 @app.route("/debug/petal")
 def debug_petal():
     """Diagnostic: probe Petal API (or its configured proxy) from this container."""
