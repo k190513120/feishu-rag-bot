@@ -112,6 +112,16 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 _sent_answer_fps.add(_fingerprint(answer))
                 if len(_sent_answer_fps) > MAX_ANSWER_FPS:
                     _sent_answer_fps.clear()
+            # Best-effort: also send as 杜小龙 (personal identity) so the
+            # reply appears in the group natively, not relayed by the
+            # Bitable bot. Non-fatal: Bitable write above is the fallback.
+            try:
+                from bot_api.personal_sender import send_as_person
+                send_as_person(chat_id, answer)
+            except Exception as e:
+                lark.logger.error(
+                    f"send_as_person failed (non-fatal): {type(e).__name__}: {e}"
+                )
         else:
             if not get_admin_user_token():
                 oauth_url = build_admin_oauth_url()
