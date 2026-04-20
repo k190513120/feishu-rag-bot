@@ -51,6 +51,11 @@ def _get_cookie() -> Optional[str]:
         val = get_config_value(_COOKIE_KEY)
         if not val:
             return None
+        # Bitable long-text cells often carry a trailing newline; any
+        # whitespace inside an HTTP Cookie header is also invalid.
+        val = val.strip()
+        if not val:
+            return None
         _cookie_value = val
         _cookie_expires_at = time.time() + _COOKIE_CACHE_TTL_SECONDS
         return val
@@ -98,32 +103,36 @@ def _fetch_chat_name(open_chat_id: str) -> Optional[str]:
         return None
 
 
-def _search_internal_id(chat_name: str) -> Optional[str]:
+def _search_internal_id(chat_name: str) -> tuple[Optional[str], bool]:
+    """Returns (internal_id, search_succeeded).
+    - (id, True): found a match
+    - (None, True): search succeeded but no group matched (ambiguous/no hits)
+    - (None, False): search itself errored (transient); caller must not persist
+      an empty row, so subsequent calls retry naturally."""
     pc = _get_client()
     if not pc:
-        return None
+        return None, False
     try:
         results = pc.search(chat_name)
     except Exception as e:
         lark.logger.error(
             f"Personal search({chat_name!r}) exception: {type(e).__name__}: {e}"
         )
-        return None
-    # Prefer exact-name group match over fuzzy first-group fallback.
+        return None, False
     groups = [
         (r["id"], _HTML_HIGHLIGHT.sub("", r["title"]))
         for r in results if r["type"] == 3
     ]
     for gid, clean_title in groups:
         if clean_title == chat_name:
-            return gid
+            return gid, True
     if groups:
         lark.logger.warning(
             f"No exact-name match for {chat_name!r}; falling back to first "
             f"group: {groups[0][1]!r}"
         )
-        return groups[0][0]
-    return None
+        return groups[0][0], True
+    return None, True
 
 
 def _resolve_internal_chat_id(open_chat_id: str) -> Optional[str]:
@@ -151,7 +160,7 @@ def _resolve_internal_chat_id(open_chat_id: str) -> Optional[str]:
     name = _fetch_chat_name(open_chat_id)
     if not name:
         return None
-    internal_id = _search_internal_id(name)
+    internal_id, searched = _search_internal_id(name)
     if internal_id:
         save_chat_mapping(open_chat_id, name, internal_id, source="auto")
         with _mapping_lock:
@@ -160,11 +169,19 @@ def _resolve_internal_chat_id(open_chat_id: str) -> Optional[str]:
             f"Auto-mapped {open_chat_id} -> {internal_id} ({name!r})"
         )
         return internal_id
-    save_chat_mapping(open_chat_id, name, "", source="auto")
-    lark.logger.warning(
-        f"Auto-map failed for {open_chat_id} ({name!r}); row saved with "
-        f"empty internal_chat_id for manual fill"
-    )
+    if searched:
+        # Search succeeded but no match — persist so operator can fill manually
+        save_chat_mapping(open_chat_id, name, "", source="auto")
+        lark.logger.warning(
+            f"Auto-map failed for {open_chat_id} ({name!r}); row saved with "
+            f"empty internal_chat_id for manual fill"
+        )
+    else:
+        # Transient error (cookie problem, network). Do NOT persist — let the
+        # next message retry naturally.
+        lark.logger.warning(
+            f"Auto-map transient error for {open_chat_id} ({name!r}); will retry on next message"
+        )
     return None
 
 
