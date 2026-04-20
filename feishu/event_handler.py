@@ -60,8 +60,12 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         if not question:
             return
 
-        # Admin pause control: "3" pauses replies in this chat, "4" resumes.
-        # Also swallows the command message itself — do not generate a reply to it.
+        # Admin handling:
+        #   - "3" / "4" pause/resume this chat (operator control)
+        #   - Any other message from admin is either a bot-sent echo (we now
+        #     send as admin via personal-identity API) or the real operator
+        #     speaking manually. Either way we must NOT generate a reply —
+        #     otherwise echoes of our own sends loop back through Petal.
         if PAUSE_ADMIN_OPEN_ID and sender_open_id == PAUSE_ADMIN_OPEN_ID:
             if question == "3":
                 _paused_chats.add(chat_id)
@@ -71,6 +75,7 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
                 _paused_chats.discard(chat_id)
                 lark.logger.info(f"Admin resumed replies in chat {chat_id}")
                 return
+            return
 
         # If this chat is paused, stay silent regardless of who is speaking
         if chat_id in _paused_chats:
@@ -108,8 +113,15 @@ def _process_message(message_id: str, message_type: str, content_raw: str,
         # Internal group / p2p: reply directly with user identity
         if chat_id and is_external_chat(chat_id):
             write_reply_to_bitable(answer, chat_id)
+            # Fingerprint the full answer AND each $$-separated bubble. Petal
+            # multi-bubble replies are often split by the Bitable bot before
+            # being posted, so we need per-part hashes to catch those echoes.
             with _seen_lock:
                 _sent_answer_fps.add(_fingerprint(answer))
+                for part in answer.split("$$"):
+                    p = part.strip()
+                    if p:
+                        _sent_answer_fps.add(_fingerprint(p))
                 if len(_sent_answer_fps) > MAX_ANSWER_FPS:
                     _sent_answer_fps.clear()
             # Best-effort: also send as 杜小龙 (personal identity) so the
